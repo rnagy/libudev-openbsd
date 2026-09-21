@@ -36,6 +36,7 @@
 #include <sys/socket.h>
 #include <ifaddrs.h>
 #include <net/if.h>
+#include <net/if_types.h>
 
 #include <errno.h>
 #include <fcntl.h>
@@ -197,6 +198,7 @@ udev_monitor_thread(void *args)
 	struct udev_list_entry *ce;
 	size_t size = sizeof(&um->cur_serial);
 	struct ifaddrs *ifap, *ifa;
+	struct if_data *ifi;
 
 	sigfillset(&set);
 	pthread_sigmask(SIG_BLOCK, &set, NULL);
@@ -224,6 +226,9 @@ udev_monitor_thread(void *args)
 		for (ifa = ifap; ifa != NULL; ifa = ifa->ifa_next) {
 			if (ifa->ifa_addr == NULL ||
 			    ifa->ifa_addr->sa_family != AF_LINK)
+				continue;
+			ifi = (struct if_data *)ifa->ifa_data;
+			if (ifi && ifi->ifi_type != IFT_ETHER)
 				continue;
 			strlcpy(syspath + 5, ifa->ifa_name, IFNAMSIZ);
 			udev_list_insert(&um->prev_net_list, syspath, NULL);

@@ -36,6 +36,7 @@
 #include <net/ethernet.h>
 #endif
 #include <net/if.h>
+#include <net/if_types.h>
 #ifdef HAVE_NET_IF_DL_H
 #include <net/if_dl.h>
 #endif
@@ -52,6 +53,7 @@ udev_net_enumerate(struct udev_enumerate *ue)
 {
 	char syspath[IFNAMSIZ + 5] = "/net/";
 	struct ifaddrs *ifap, *ifa;
+	struct if_data *ifi;
 	int ret = 0;
 
 	if (getifaddrs(&ifap) != 0)
@@ -60,6 +62,9 @@ udev_net_enumerate(struct udev_enumerate *ue)
 	for (ifa = ifap; ifa != NULL; ifa = ifa->ifa_next) {
 		if (ifa->ifa_addr == NULL ||
 		    ifa->ifa_addr->sa_family != AF_LINK)
+			continue;
+		ifi = (struct if_data *)ifa->ifa_data;
+		if (ifi && ifi->ifi_type != IFT_ETHER)
 			continue;
 		strlcpy(syspath + 5, ifa->ifa_name, IFNAMSIZ);
 		if ((ret = udev_enumerate_add_device(ue, syspath)) < 0)
