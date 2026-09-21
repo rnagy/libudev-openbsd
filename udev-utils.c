@@ -152,6 +152,18 @@ static const struct subsystem_config subsystems[] = {
 		.syspath = DEV_PATH_ROOT "/fido/[0-9]*",
 		.create_handler = create_keyboard_handler,
 	},
+	{
+		.subsystem = "input",
+		.syspath = DEV_PATH_ROOT "/wskbd[0-9]*",
+		.flags = SCFLAG_SKIP_IF_EVDEV,
+		.create_handler = create_keyboard_handler,
+	},
+	{
+		.subsystem = "input",
+		.syspath = DEV_PATH_ROOT "/wsmouse[0-9]*",
+		.flags = SCFLAG_SKIP_IF_EVDEV,
+		.create_handler = create_keyboard_handler,
+	},
 #endif
 };
 
