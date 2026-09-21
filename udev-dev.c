@@ -242,46 +242,45 @@ udev_dev_enumerate(struct udev_enumerate *ue)
 	return (ret);
 }
 
-int
-udev_dev_monitor(char *msg, char *syspath, size_t syspathlen)
+struct devret
+udev_dev_monitor(struct udev *udev, struct udev_filter_head filters,
+    struct udev_list *cur, struct udev_list *prev)
 {
- 	char devpath[DEV_PATH_MAX] = DEV_PATH_ROOT "/";
-	const char *type, *dev_name;
-	size_t type_len, dev_len, root_len;
-	int action;
+	struct devret ret;
+	int found;
+	struct udev_list_entry *ce, *pe;
 
-	root_len = strlen(devpath);
-	action = UD_ACTION_NONE;
+	ret.action = UD_ACTION_NONE;
 
-	if (msg[0] != DEVD_EVENT_NOTICE)
-		return (UD_ACTION_NONE);
+	/* attach */
+	udev_list_entry_foreach(ce, udev_list_entry_get_first(cur)) {
+		found = 0;
+		if (!_udev_list_entry_get_name(ce))
+			continue;
+		if (udev_list_member(prev, _udev_list_entry_get_name(ce), NULL))
+			found = 1;
+		if (!found && udev_filter_match(udev, &filters, _udev_list_entry_get_name(ce))) {
+			ret.action = UD_ACTION_ADD;
+			ret.syspath = _udev_list_entry_get_name(ce);
+			udev_list_insert(prev, udev_list_entry_get_name(ce), NULL);
+		}
+	}
 
-	if (!(match_kern_prop_value(msg + 1, "system", "DEVFS")
-	    && match_kern_prop_value(msg + 1, "subsystem", "CDEV"))
-	    && !match_kern_prop_value(msg + 1, "system", "DRM"))
-		return (UD_ACTION_NONE);
+	/* detach */
+	udev_list_entry_foreach(pe, udev_list_entry_get_first(prev)) {
+		found = 0;
+		if (!_udev_list_entry_get_name(pe))
+			continue;
+		if (udev_list_member(cur, _udev_list_entry_get_name(pe), NULL))
+			found = 1;
+		if (!found && udev_filter_match(udev, &filters, _udev_list_entry_get_name(pe))) {
+			ret.action = UD_ACTION_REMOVE;
+			ret.syspath = _udev_list_entry_get_name(pe);
+			udev_list_remove(prev, udev_list_entry_get_name(pe), NULL);
+		}
+	}
 
-	type = get_kern_prop_value(msg + 1, "type", &type_len);
-	dev_name = get_kern_prop_value(msg + 1, "cdev", &dev_len);
-	if (type == NULL ||
-	    dev_name == NULL ||
-	    dev_len > (sizeof(devpath) - root_len - 1))
-		return (UD_ACTION_NONE);
-
-	if (	 type_len == 6 && strncmp(type, "CREATE", type_len) == 0)
-		action = UD_ACTION_ADD;
-	else if (type_len == 7 && strncmp(type, "DESTROY", type_len) == 0)
-		action = UD_ACTION_REMOVE;
-	else if (type_len == 7 && strncmp(type, "HOTPLUG", type_len) == 0)
-		action = UD_ACTION_HOTPLUG;
-	else
-            	return (UD_ACTION_NONE);
-
-	memcpy(devpath + root_len, dev_name, dev_len);
-	devpath[dev_len + root_len] = 0;
-	strlcpy(syspath, get_syspath_by_devpath(devpath), syspathlen);
-
-	return (action);
+	return (ret);
 }
 
 static int

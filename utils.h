@@ -92,6 +92,11 @@ do {									\
 #define	ST_RDEV	st_rdev
 #endif
 
+struct devret {
+	const char *syspath;
+	int action;
+};
+
 typedef int (* scandir_cb_t)(const char *path, mode_t type, void *args);
 
 /* If .recursive is true, then .cb gets called for non-dir

@@ -111,6 +111,7 @@ udev_net_monitor(char *msg, char *syspath, size_t syspathlen)
 void
 create_net_handler(struct udev_device *ud)
 {
+	printf("%s\n", __FUNCTION__);
 	struct udev_list *props, *attrs;
 	const char *ifname;
 #ifdef HAVE_NET_IF_DL_H

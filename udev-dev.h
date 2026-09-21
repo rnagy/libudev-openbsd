@@ -48,6 +48,8 @@ create_node_handler_t	create_hidraw_handler;
 #endif
 
 int udev_dev_enumerate(struct udev_enumerate *ue);
-int udev_dev_monitor(char *msg, char *syspath, size_t syspathlen);
+struct devret udev_dev_monitor(struct udev *udev,
+    struct udev_filter_head filters, struct udev_list *cur,
+    struct udev_list *prev);
 
 #endif /* UDEV_DEV_H_ */

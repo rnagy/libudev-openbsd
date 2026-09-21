@@ -58,6 +58,8 @@ struct udev_monitor {
 	pthread_t thread;
 	struct udev_list cur_dev_list;
 	struct udev_list prev_dev_list;
+	struct udev_list cur_net_list;
+	struct udev_list prev_net_list;
 	int cur_serial;
 	int prev_serial;
 };
@@ -160,6 +162,24 @@ udev_monitor_enumerate_cb(const char *path, mode_t type, void *arg)
 	return (0);
 }
 
+static struct devret
+handle_autoconf_event(struct udev_monitor *um)
+{
+	struct devret ret;
+
+	ret.action = UD_ACTION_NONE;
+
+	ret = udev_dev_monitor(um->udev, um->filters, &um->cur_dev_list,
+				&um->prev_dev_list);
+
+#ifdef notyet
+	if (ret.action == UD_ACTION_NONE)
+		ret = udev_net_monitor();
+#endif
+
+	return (ret);
+}
+
 static void *
 udev_monitor_thread(void *args)
 {
@@ -168,8 +188,8 @@ udev_monitor_thread(void *args)
 	char path[DEV_PATH_MAX] = DEV_PATH_ROOT "/";
 	char path_fido[DEV_PATH_MAX] = DEV_PATH_ROOT "/fido/";
 	struct scandir_ctx mctx;
-	int found;
-	struct udev_list_entry *ce, *pe;
+	struct devret devret;
+	struct udev_list_entry *ce;
 	size_t size = sizeof(&um->cur_serial);
 
 	sigfillset(&set);
@@ -210,31 +230,10 @@ udev_monitor_thread(void *args)
 			printf("failed to scan\n");
 		pthread_mutex_unlock(&scan_mtx);
 
-		/* attach */
-		udev_list_entry_foreach(ce, udev_list_entry_get_first(&um->cur_dev_list)) {
-			found = 0;
-			if (!_udev_list_entry_get_name(ce))
-				continue;
-			if (udev_list_member(&um->prev_dev_list, _udev_list_entry_get_name(ce), NULL))
-				found = 1;
-			if (!found && udev_filter_match(um->udev, &um->filters, _udev_list_entry_get_name(ce))) {
-				udev_monitor_send_device(um, _udev_list_entry_get_name(ce), UD_ACTION_ADD);
-				udev_list_insert(&um->prev_dev_list, udev_list_entry_get_name(ce), NULL);
-			}
-		}
+		devret = handle_autoconf_event(um);
+		if (devret.action != UD_ACTION_NONE)
+			udev_monitor_send_device(um, devret.syspath, devret.action);
 
-		/* detach */
-		udev_list_entry_foreach(pe, udev_list_entry_get_first(&um->prev_dev_list)) {
-			found = 0;
-			if (!_udev_list_entry_get_name(pe))
-				continue;
-			if (udev_list_member(&um->cur_dev_list, _udev_list_entry_get_name(pe), NULL))
-				found = 1;
-			if (!found && udev_filter_match(um->udev, &um->filters, _udev_list_entry_get_name(pe))) {
-				udev_monitor_send_device(um, _udev_list_entry_get_name(pe), UD_ACTION_REMOVE);
-				udev_list_remove(&um->prev_dev_list, udev_list_entry_get_name(pe), NULL);
-			}
-		}
 		um->prev_serial = um->cur_serial;
 	}
 
@@ -272,6 +271,8 @@ udev_monitor_new_from_netlink(struct udev *udev, const char *name)
 	STAILQ_INIT(&um->queue);
 	udev_list_init(&um->cur_dev_list);
 	udev_list_init(&um->prev_dev_list);
+	udev_list_init(&um->cur_net_list);
+	udev_list_init(&um->prev_net_list);
 	size = sizeof(&um->cur_serial);
 	(void)sysctl(mib, 2, &um->cur_serial, &size, NULL, 0);
 	um->prev_serial = um->cur_serial;
@@ -355,6 +356,8 @@ udev_monitor_unref(struct udev_monitor *um)
 		udev_filter_free(&um->filters);
 		udev_list_free(&um->cur_dev_list);
 		udev_list_free(&um->prev_dev_list);
+		udev_list_free(&um->cur_net_list);
+		udev_list_free(&um->prev_net_list);
 		udev_monitor_queue_drop(&um->queue);
 		pthread_mutex_destroy(&um->mtx);
 		(void)_udev_unref(um->udev);
