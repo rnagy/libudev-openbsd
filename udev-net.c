@@ -74,7 +74,6 @@ udev_net_enumerate(struct udev_enumerate *ue)
 int
 udev_net_monitor(char *msg, char *syspath, size_t syspathlen)
 {
-	printf("efefe\n");
 	char netpath[IFNAMSIZ + 5] = "/net/";
 	const char *type, *dev_name;
 	size_t type_len, dev_len;
