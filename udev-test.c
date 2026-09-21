@@ -68,7 +68,7 @@ main(void)
 
 	/* Set up a monitor to monitor hidraw devices */
 	mon = udev_monitor_new_from_netlink(udev, "udev");
-	udev_monitor_filter_add_match_subsystem_devtype(mon, "input", NULL);
+	udev_monitor_filter_add_match_subsystem_devtype(mon, "net", NULL);
 	udev_monitor_enable_receiving(mon);
 	/* Get the file descriptor (fd) for the monitor.
 	   This fd will get passed to select() */
@@ -76,7 +76,7 @@ main(void)
 
 	/* Create a list of the devices in the 'hidraw' subsystem. */
 	enumerate = udev_enumerate_new(udev);
-	udev_enumerate_add_match_subsystem(enumerate, "input");
+	udev_enumerate_add_match_subsystem(enumerate, "net");
 	udev_enumerate_scan_devices(enumerate);
 	devices = udev_enumerate_get_list_entry(enumerate);
 	/* For each item enumerated, print out its information.
@@ -159,8 +159,8 @@ main(void)
 			}
 		}
 		usleep(250 * 1000);
-		printf(".");
-		fflush(stdout);
+//		printf(".");
+//		fflush(stdout);
 	}
 
 	udev_unref(udev);

@@ -71,47 +71,66 @@ udev_net_enumerate(struct udev_enumerate *ue)
 	return (ret);
 }
 
-int
-udev_net_monitor(char *msg, char *syspath, size_t syspathlen)
+struct devret
+udev_net_monitor(struct udev *udev, struct udev_filter_head filters,
+    struct udev_list *cur, struct udev_list *prev)
 {
-	char netpath[IFNAMSIZ + 5] = "/net/";
-	const char *type, *dev_name;
-	size_t type_len, dev_len;
-	int action;
+	struct devret ret;
+	int found;
+	struct udev_list_entry *ce, *pe;
+	char syspath[IFNAMSIZ + 5] = "/net/";
+	struct ifaddrs *ifap, *ifa;
 
-	if (msg[0] != DEVD_EVENT_NOTICE)
-		return (UD_ACTION_NONE);
+	ret.action = UD_ACTION_NONE;
 
-	msg++;
-	if (!(match_kern_prop_value(msg, "system", "IFNET")))
-		return (UD_ACTION_NONE);
+	if (getifaddrs(&ifap) != 0)
+		return (ret);
 
-	action = UD_ACTION_NONE;
+	for (ifa = ifap; ifa != NULL; ifa = ifa->ifa_next) {
+		if (ifa->ifa_addr == NULL ||
+		    ifa->ifa_addr->sa_family != AF_LINK)
+			continue;
+		strlcpy(syspath + 5, ifa->ifa_name, IFNAMSIZ);
+		if (udev_list_insert(cur, syspath, NULL) == -1)
+			continue;
+	}
 
-	type = get_kern_prop_value(msg, "type", &type_len);
-	dev_name = get_kern_prop_value(msg, "subsystem", &dev_len);
-	if (type == NULL || dev_name == NULL ||
-	    dev_len > (sizeof(netpath) - 5 - 1))
-		return (UD_ACTION_NONE);
+	freeifaddrs(ifap);
 
-	if (type_len == 6 && strncmp(type, "ATTACH", type_len) == 0)
-		action = UD_ACTION_ADD;
-	else if (type_len == 6 && strncmp(type, "DETACH", type_len) == 0)
-		action = UD_ACTION_REMOVE;
-	else
-		return (UD_ACTION_NONE);;
+	/* attach */
+	udev_list_entry_foreach(ce, udev_list_entry_get_first(cur)) {
+		found = 0;
+		if (!_udev_list_entry_get_name(ce))
+			continue;
+		if (udev_list_member(prev, _udev_list_entry_get_name(ce), NULL))
+			found = 1;
+		if (!found && udev_filter_match(udev, &filters, _udev_list_entry_get_name(ce))) {
+			ret.action = UD_ACTION_ADD;
+			ret.syspath = _udev_list_entry_get_name(ce);
+			udev_list_insert(prev, udev_list_entry_get_name(ce), NULL);
+		}
+	}
 
-	memcpy(netpath + 5, dev_name, dev_len);
-	netpath[dev_len + 5] = 0;
-	strlcpy(syspath, netpath, syspathlen);
+	/* detach */
+	udev_list_entry_foreach(pe, udev_list_entry_get_first(prev)) {
+		found = 0;
+		if (!_udev_list_entry_get_name(pe))
+			continue;
+		if (udev_list_member(cur, _udev_list_entry_get_name(pe), NULL))
+			found = 1;
+		if (!found && udev_filter_match(udev, &filters, _udev_list_entry_get_name(pe))) {
+			ret.action = UD_ACTION_REMOVE;
+			ret.syspath = _udev_list_entry_get_name(pe);
+			udev_list_remove(prev, udev_list_entry_get_name(pe), NULL);
+		}
+	}
 
-	return (action);
+	return (ret);
 }
 
 void
 create_net_handler(struct udev_device *ud)
 {
-	printf("%s\n", __FUNCTION__);
 	struct udev_list *props, *attrs;
 	const char *ifname;
 #ifdef HAVE_NET_IF_DL_H

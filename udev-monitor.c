@@ -32,6 +32,11 @@
 
 #include <sys/sysctl.h>
 
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <ifaddrs.h>
+#include <net/if.h>
+
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -172,10 +177,9 @@ handle_autoconf_event(struct udev_monitor *um)
 	ret = udev_dev_monitor(um->udev, um->filters, &um->cur_dev_list,
 				&um->prev_dev_list);
 
-#ifdef notyet
 	if (ret.action == UD_ACTION_NONE)
-		ret = udev_net_monitor();
-#endif
+		ret = udev_net_monitor(um->udev, um->filters, &um->cur_net_list,
+					&um->prev_net_list);
 
 	return (ret);
 }
@@ -187,10 +191,12 @@ udev_monitor_thread(void *args)
 	sigset_t set;
 	char path[DEV_PATH_MAX] = DEV_PATH_ROOT "/";
 	char path_fido[DEV_PATH_MAX] = DEV_PATH_ROOT "/fido/";
+	char syspath[IFNAMSIZ + 5] = "/net/";
 	struct scandir_ctx mctx;
 	struct devret devret;
 	struct udev_list_entry *ce;
 	size_t size = sizeof(&um->cur_serial);
+	struct ifaddrs *ifap, *ifa;
 
 	sigfillset(&set);
 	pthread_sigmask(SIG_BLOCK, &set, NULL);
@@ -213,6 +219,18 @@ udev_monitor_thread(void *args)
 	}
 	pthread_mutex_unlock(&scan_mtx);
 
+	/* get the inintial interface list */
+	if (getifaddrs(&ifap) == 0) {
+		for (ifa = ifap; ifa != NULL; ifa = ifa->ifa_next) {
+			if (ifa->ifa_addr == NULL ||
+			    ifa->ifa_addr->sa_family != AF_LINK)
+				continue;
+			strlcpy(syspath + 5, ifa->ifa_name, IFNAMSIZ);
+			udev_list_insert(&um->prev_net_list, syspath, NULL);
+		}
+		freeifaddrs(ifap);
+	}
+
 	for (;;) {
 		(void)sysctl(mib, 2, &um->cur_serial, &size, NULL, 0);
 
@@ -221,8 +239,9 @@ udev_monitor_thread(void *args)
 			continue;
 		}
 
-		/* reinit the current device list */
+		/* reinit the current device lists */
 		udev_list_free(&um->cur_dev_list);
+		udev_list_free(&um->cur_net_list);
 
 		pthread_mutex_lock(&scan_mtx);
 		if ((scandir_recursive(path, sizeof(path), &mctx) == -1) ||
