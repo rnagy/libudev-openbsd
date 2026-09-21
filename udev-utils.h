@@ -32,12 +32,6 @@ struct udev_device;
 
 #define	DEV_PATH_ROOT	"/dev"
 #define	DEV_PATH_MAX	80
-#define	SYS_PATH_MAX	80
-
-#define	DEVD_EVENT_ATTACH	'+'
-#define	DEVD_EVENT_DETACH	'-'
-#define	DEVD_EVENT_NOTICE	'!'
-#define	DEVD_EVENT_UNKNOWN	'?'
 
 #define	UNKNOWN_SUBSYSTEM	"#"
 #define	UNKNOWN_DEVTYPE		"#"
